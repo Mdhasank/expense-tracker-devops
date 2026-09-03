@@ -1,5 +1,9 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:22-alpine'
+        }
+    }
 
     stages {
 
@@ -9,12 +13,52 @@ pipeline {
             }
         }
 
-        stage('Verify Project') {
+        stage('Verify Environment') {
             steps {
                 sh '''
-                    echo "Repository successfully checked out."
+                    echo "Node version:"
+                    node --version
+
+                    echo "NPM version:"
+                    npm --version
+
+                    echo "Working directory:"
+                    pwd
+
                     echo "Project files:"
                     ls -la
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    echo "Installing backend dependencies..."
+                    cd backend
+                    npm install
+
+                    echo "Installing frontend dependencies..."
+                    cd ../frontend
+                    npm install
+                '''
+            }
+        }
+
+        stage('Frontend Lint') {
+            steps {
+                sh '''
+                    cd frontend
+                    npm run lint
+                '''
+            }
+        }
+
+        stage('Frontend Build') {
+            steps {
+                sh '''
+                    cd frontend
+                    npm run build
                 '''
             }
         }
