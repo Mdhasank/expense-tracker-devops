@@ -1,76 +1,109 @@
 pipeline {
+
     agent {
         docker {
-            image 'node:22-alpine'
+            image 'mohd7895k/expense-tracker-jenkins-agent:1.0'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
         }
+    }
+
+    environment {
+        DOCKERHUB_USERNAME = 'mohd7895k'
+
+        BACKEND_IMAGE  = "${DOCKERHUB_USERNAME}/expense-tracker-backend"
+        FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/expense-tracker-frontend"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
+                echo 'Checking out latest code from repository...'
+
                 checkout scm
             }
         }
 
-        stage('Verify Environment') {
+        stage('Build Docker Images') {
             steps {
+                echo 'Building backend Docker image...'
+
                 sh '''
-                    echo "Node version:"
-                    node --version
+                    docker build \
+                        -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${BACKEND_IMAGE}:latest \
+                        ./backend
+                '''
 
-                    echo "NPM version:"
-                    npm --version
+                echo 'Building frontend Docker image...'
 
-                    echo "Working directory:"
-                    pwd
-
-                    echo "Project files:"
-                    ls -la
+                sh '''
+                    docker build \
+                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${FRONTEND_IMAGE}:latest \
+                        ./frontend
                 '''
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Push to Docker Hub') {
             steps {
-                sh '''
-                    echo "Installing backend dependencies..."
-                    cd backend
-                    npm install
 
-                    echo "Installing frontend dependencies..."
-                    cd ../frontend
-                    npm install
-                '''
-            }
-        }
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
 
-        stage('Frontend Lint') {
-            steps {
-                sh '''
-                    cd frontend
-                    npm run lint
-                '''
-            }
-        }
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login \
+                            -u "$DOCKER_USER" \
+                            --password-stdin
 
-        stage('Frontend Build') {
-            steps {
-                sh '''
-                    cd frontend
-                    npm run build
-                '''
+                        echo "Pushing backend image..."
+
+                        docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${BACKEND_IMAGE}:latest
+
+                        echo "Pushing frontend image..."
+
+                        docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${FRONTEND_IMAGE}:latest
+
+                        docker logout
+                    '''
+                }
             }
         }
     }
 
     post {
+
+        always {
+            echo 'Cleaning up dangling Docker images...'
+
+            sh '''
+                docker image prune -f || true
+            '''
+        }
+
         success {
-            echo 'Expense Tracker CI pipeline completed successfully!'
+            echo "SUCCESS: Pipeline completed successfully for build #${BUILD_NUMBER}"
         }
 
         failure {
-            echo 'Expense Tracker CI pipeline failed!'
+            echo "FAILURE: Pipeline failed for build #${BUILD_NUMBER}"
         }
     }
 }

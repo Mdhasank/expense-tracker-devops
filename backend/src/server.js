@@ -1,24 +1,32 @@
 const express = require("express");
+
 const cors = require("cors");
+
 const cookieParser = require("cookie-parser");
+
 require("dotenv").config();
 
 const connectDB = require("./config/db");
+
 const authRoutes = require("./routes/authRoutes");
+
 const userRoutes = require("./routes/userRoutes");
+
 const expenseRoutes = require("./routes/expenseRoutes");
+
 const errorMiddleware = require("./middleware/errorMiddleware");
 
 const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
     credentials: true,
   })
 );
 
 app.use(express.json());
+
 app.use(cookieParser());
 
 app.get("/", (req, res) => {
@@ -35,7 +43,9 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+
 app.use("/api/users", userRoutes);
+
 app.use("/api/expenses", expenseRoutes);
 
 app.use(errorMiddleware);
@@ -44,7 +54,6 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   await connectDB();
-  
 
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
