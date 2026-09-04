@@ -1,10 +1,7 @@
 pipeline {
 
     agent {
-        docker {
-            image 'mohd7895k/expense-tracker-jenkins-agent:1.0'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
+        label 'docker-build-agent'
     }
 
     environment {
